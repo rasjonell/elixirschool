@@ -5,7 +5,7 @@ title: OTP Concurrency
 
 Chúng ta đã xem về các trừu tượng hoá của Elixir cho xử lý đồng thời (concurrency), nhưng đôi khi chúng ta cần quyền điều khiển lớn hơn, bởi thế chúng ta sẽ đi sâu vào tìm hiểu hành vi của OTP mà đã có sẵn ở trong Elixir.
 
-Trong bài này, chúng ta sẽ tập trung vào hai phần chính: GenServers và GenEvents.
+Trong bài này, chúng ta sẽ tập trung vào hai phần chính: GenServers.
 
 {% include toc.html %}
 
@@ -39,7 +39,7 @@ end
 
 Sẽ có những trường hợp cần thiết để tương tác với GenServers theo một cách tuần tự, gọi một hàm và đợi trả về của nó. Để xử lý yêu cầu một cách tuần tự, chúng ta cần thực thi `GenServer.handle_call/3` callback mà nhận vào: yêu cầu, PID của người gọi, và trạng thái hiện tại; một tuple sẽ được mong đợi để trả về: `{:reply, response, state}`.
 
-Với việc sử dụng so trùng mẫu (pattern matching), chúng ta có thể định nghĩa callbacks cho rất nhiều yêu cầu và trạng thái. Một chuỗi hoàn chỉnh của các giá trị được phép trả về có thể được tìm thấy trong tài liệu [`GenServer.handle_call/3`](https://hexdocs.pm/elixir/GenServer.html#c:handle_call/3) 
+Với việc sử dụng so trùng mẫu (pattern matching), chúng ta có thể định nghĩa callbacks cho rất nhiều yêu cầu và trạng thái. Một chuỗi hoàn chỉnh của các giá trị được phép trả về có thể được tìm thấy trong tài liệu [`GenServer.handle_call/3`](https://hexdocs.pm/elixir/GenServer.html#c:handle_call/3)
 
 Để minh hoạ về yêu cầu tuần tự, hãy thêm vào tính năng để hiển thị trạng thái hiện tại của hàng đợi và xoá một giá trị:
 
@@ -148,78 +148,3 @@ iex> SimpleQueue.queue
 [1, 2, 3, 20]
 ```
 Để biết thêm thông tin, hãy xem tài liệu chính thức tại [GenServer](https://hexdocs.pm/elixir/GenServer.html#content).
-
-## GenEvent
-
-Chúng ta đã học được rằng GenServers là các tiến trình mà cần lưu giữ trạng thái và có thể xử lý được các yêu cầu đồng bộ cũng như bất đồng bộ. Vậy GenEvent là gì? GenEvents để quản lý các sự kiện (event) mà nó sẽ nhận vào một sự kiện, sau đó sẽ thông báo cho những consumers (tạm dịch: tiền trình tiêu dùng) đã đăng ký. Nhờ đó chúng ta có một cơ chế để thêm và xoá các hàm xử lý (handlers) động cho các sự kiện.
-
-### Xử lý các sự kiện
-
-Hàm callback quan trọng nhất trong GenEvents mà bạn có thể hình dung là `handle_event/2`. Hàm này nhận vào sự kiện cùng với trạng thái hiện tại của hàm xử lý, sau đó sẽ trả lại một tuple: `{:ok, state}`.
-
-Để minh hoạ tính năng của GenEvent, chúng ta hãy bắt đầu bằng việc tạo hai hàm xử lý (handlers), một hàm dành để giữ log của những thông tin đến, và một để lưu trữ chúng lại (trên lý thuyết): 
-
-```elixir
-defmodule LoggerHandler do
-  use GenEvent
-
-  def handle_event({:msg, msg}, messages) do
-    IO.puts("Logging new message: #{msg}")
-    {:ok, [msg | messages]}
-  end
-end
-
-defmodule PersistenceHandler do
-  use GenEvent
-
-  def handle_event({:msg, msg}, state) do
-    IO.puts("Persisting log message: #{msg}")
-
-    # Save message
-
-    {:ok, state}
-  end
-end
-```
-
-### Gọi các hàm xử lý
-
-Ngoài `handle_event/2` ra, GenEvents đồng thời cũng hỗ trợ hàm `handle_call/2`. Với hàm `handle_call/2` chúng ta có thể xử lý các thông điệp đồng bộ được chỉ định bên trong hàm xử lý đó.
-
-Hãy cập nhật `LoggerHandler` để thêm vào hàm dùng để nhận log của thông điệp hiện tại:
-
-```elixir
-defmodule LoggerHandler do
-  use GenEvent
-
-  def handle_event({:msg, msg}, messages) do
-    IO.puts("Logging new message: #{msg}")
-    {:ok, [msg | messages]}
-  end
-
-  def handle_call(:messages, messages) do
-    {:ok, Enum.reverse(messages), messages}
-  end
-end
-```
-
-### Sử dụng GenEvents
-
-Với các hàm xử lý vừa làm, chúng ta cần làm quen thêm với một vài hàm mà GenEvent có sẵn. Ba hàm quan trọng nhất là: `add_handler/3`, `notify/2` và `call/4`. Những hàm đó cho phép chúng ta thêm vào các hàm xử lý, phát tán (broadcast) một thông điệp, và gọi một hàm xử lý nhất định nào đó. 
-
-Nếu chúng ta gộp tất cả lại thì sẽ nhìn thấy các hàm xử lý trên thực tế như dưới đây:
-
-```elixir
-iex> {:ok, pid} = GenEvent.start_link([])
-iex> GenEvent.add_handler(pid, LoggerHandler, [])
-iex> GenEvent.add_handler(pid, PersistenceHandler, [])
-
-iex> GenEvent.notify(pid, {:msg, "Hello World"})
-Logging new message: Hello World
-Persisting log message: Hello World
-
-iex> GenEvent.call(pid, LoggerHandler, :messages)
-["Hello World"]
-```
-
-Bạn có thể xem tài liệu chính thức tại [GenEvent](https://hexdocs.pm/elixir/GenEvent.html#content) để xem danh mục tất cả các callback và các hàm mà GenEvent hỗ trợ.
