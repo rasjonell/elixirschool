@@ -2,8 +2,10 @@ module ElixirSchoolRedirects
 
   REDIRECTS = {
     "" => "en",
+    "cn" => "zh-hans",
     "jp" => "ja",
-    "my" => "ma"
+    "my" => "ma",
+    "tw" => "zh-hant"
   }
 
   class RedirectPage < Jekyll::Page
